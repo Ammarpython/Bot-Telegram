@@ -32,10 +32,11 @@ from telegram.constants import ParseMode
 #  ⚙️  الإعدادات
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-BOT_TOKEN       = "8619014051:AAFSAKp9O4AoJ0Du4TKQPFGqxCTp4H5dSAA"
+import os
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
 API_URL         = "https://adhahi.dz/api/v1/public/wilaya-quotas"
-POLL_INTERVAL   = 0.05          # 50ms
-HTTP_TIMEOUT    = 2
+POLL_INTERVAL   = 0.5           # 500ms على السيرفر (Railway أبطأ من المحلي)
+HTTP_TIMEOUT    = 10            # رفعنا من 2 إلى 10 ثواني
 DB_FILE         = "adhahi_subs.db"
 
 API_HEADERS = {
@@ -592,6 +593,18 @@ async def post_init(app: "Application"):
     log.info("✅ حلقة المراقبة بدأت")
 
 
+async def error_handler(update: object, ctx: ContextTypes.DEFAULT_TYPE):
+    """معالج الأخطاء العامة — يمنع توقف البوت."""
+    from telegram.error import Conflict, NetworkError, TimedOut
+    err = ctx.error
+    if isinstance(err, Conflict):
+        log.error("❌ Conflict: أوقف أي نسخة أخرى من البوت!")
+    elif isinstance(err, (NetworkError, TimedOut)):
+        log.warning(f"⚠️ Network error (سيعيد المحاولة): {err}")
+    else:
+        log.error(f"❌ خطأ غير متوقع: {err}")
+
+
 def main():
     init_db()
 
@@ -615,11 +628,15 @@ def main():
     app.add_handler(CommandHandler("mysubs",      cmd_mysubs))
     app.add_handler(CallbackQueryHandler(on_callback))
 
+    # ── معالج الأخطاء — يمنع توقف البوت عند أي خطأ
+    app.add_error_handler(error_handler)
+
     # ── تشغيل البوت
     log.info("📡 البوت يعمل — اضغط Ctrl+C للإيقاف")
     app.run_polling(
         allowed_updates=Update.ALL_TYPES,
-        drop_pending_updates=True,
+        drop_pending_updates=True,    # تجاهل الرسائل القديمة عند إعادة التشغيل
+        close_loop=False,
     )
 
 
