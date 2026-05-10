@@ -561,8 +561,33 @@ async def on_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 #  🚀  التشغيل الرئيسي
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+async def prefetch_wilayas():
+    """جلب أولي للولايات قبل قبول الأوامر."""
+    global _wilaya_state, _wilaya_info
+    log.info("⏳ جلب أولي لقائمة الولايات...")
+    for attempt in range(10):
+        data = await asyncio.get_event_loop().run_in_executor(
+            None, fetch_wilayas_sync
+        )
+        if data:
+            for w in data:
+                code      = str(w.get("wilayaCode", ""))
+                name_ar   = w.get("wilayaNameAr", "")
+                name_fr   = w.get("wilayaNameFr", "")
+                available = bool(w.get("available", False))
+                _wilaya_info[code]  = {"ar": name_ar, "fr": name_fr}
+                _wilaya_state[code] = available
+            open_c = sum(1 for v in _wilaya_state.values() if v)
+            log.info(f"✅ جُلبت {len(_wilaya_state)} ولاية — مفتوحة: {open_c}")
+            return
+        log.warning(f"⚠️ جلب أولي فشل ({attempt+1}/10)")
+        await asyncio.sleep(1)
+    log.error("❌ فشل الجلب الأولي")
+
+
 async def post_init(app: "Application"):
-    """يبدأ حلقة المراقبة بعد تهيئة البوت."""
+    """جلب البيانات الأولية ثم بدء حلقة المراقبة."""
+    await prefetch_wilayas()
     asyncio.create_task(monitor_loop(app))
     log.info("✅ حلقة المراقبة بدأت")
 
